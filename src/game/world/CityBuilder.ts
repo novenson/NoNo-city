@@ -223,6 +223,18 @@ export class CityBuilder {
 
     // 8. Player Accessible Home Exterior & Interior
     this.buildPlayerHome();
+
+    // 9. Compton / SoCal Residential Bungalows & Backyards
+    this.buildComptonNeighborhood();
+
+    // 10. Corner Gas Station ("SoCal 76 Fuel")
+    this.buildGasStation();
+
+    // 11. Battle Royale Training Grounds & Target Range
+    this.buildTrainingGrounds();
+
+    // 12. Industrial Warehouses
+    this.buildIndustrialWarehouses();
   }
 
   private buildOceanAndBeach() {
@@ -1008,6 +1020,276 @@ export class CityBuilder {
     this.obstacles.push({ box, type: 'prop' });
   }
 
+  // === COMPTON / SOCAL RESIDENTIAL NEIGHBORHOOD ===
+  private buildComptonNeighborhood() {
+    const houseColors = [0xd6d3d1, 0xfef3c7, 0xfce7f3, 0xe2e8f0, 0xfae8ff];
+    const roofColors = [0x78350f, 0x1e293b, 0x991b1b, 0x475569];
+
+    // Build row of Compton bungalows along Northwest quadrant (x: -60 to -110, z: -100 to -150)
+    for (let i = 0; i < 6; i++) {
+      const hx = -65 - (i % 3) * 22;
+      const hz = -110 - Math.floor(i / 3) * 28;
+
+      const group = new THREE.Group();
+      group.position.set(hx, 0, hz);
+
+      const wallCol = houseColors[i % houseColors.length];
+      const roofCol = roofColors[i % roofColors.length];
+
+      // Stucco House Body (Width 12, Height 4.2, Depth 10)
+      const wallMat = new THREE.MeshStandardMaterial({ color: wallCol, roughness: 0.85 });
+      const houseBody = new THREE.Mesh(new THREE.BoxGeometry(12, 4.2, 10), wallMat);
+      houseBody.position.y = 2.1;
+      group.add(houseBody);
+
+      // Pitched Roof
+      const roofMat = new THREE.MeshStandardMaterial({ color: roofCol, roughness: 0.7 });
+      const roofGeo = new THREE.ConeGeometry(9.5, 2.5, 4);
+      const roof = new THREE.Mesh(roofGeo, roofMat);
+      roof.rotation.y = Math.PI / 4;
+      roof.position.y = 4.2 + 1.25;
+      group.add(roof);
+
+      // Front Porch & Overhang
+      const porchMat = new THREE.MeshStandardMaterial({ color: 0x44403c, roughness: 0.8 });
+      const porch = new THREE.Mesh(new THREE.BoxGeometry(5, 0.25, 2.5), porchMat);
+      porch.position.set(0, 0.125, 6);
+      group.add(porch);
+
+      // Front Door
+      const doorMat = new THREE.MeshStandardMaterial({ color: 0x451a03, roughness: 0.7 });
+      const door = new THREE.Mesh(new THREE.BoxGeometry(1.6, 2.8, 0.1), doorMat);
+      door.position.set(0, 1.4, 5.05);
+      group.add(door);
+
+      // Wooden Backyard Fence
+      const fenceMat = new THREE.MeshStandardMaterial({ color: 0x854d0e, roughness: 0.9 });
+      const fenceL = new THREE.Mesh(new THREE.BoxGeometry(0.15, 1.8, 12), fenceMat);
+      fenceL.position.set(-7, 0.9, -1);
+      group.add(fenceL);
+
+      const fenceR = new THREE.Mesh(new THREE.BoxGeometry(0.15, 1.8, 12), fenceMat);
+      fenceR.position.set(7, 0.9, -1);
+      group.add(fenceR);
+
+      // Street Basketball Hoop in driveway
+      if (i % 2 === 0) {
+        const poleMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8 });
+        const hoopPole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 4.2, 8), poleMat);
+        hoopPole.position.set(7.5, 2.1, 7);
+        group.add(hoopPole);
+
+        const boardMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 });
+        const backboard = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.0, 0.08), boardMat);
+        backboard.position.set(7.5, 3.8, 7.2);
+        group.add(backboard);
+
+        const rimMat = new THREE.MeshBasicMaterial({ color: 0xf97316 });
+        const rim = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.04, 6, 12), rimMat);
+        rim.rotation.x = Math.PI / 2;
+        rim.position.set(7.5, 3.5, 7.6);
+        group.add(rim);
+      }
+
+      this.scene.add(group);
+
+      const box = new THREE.Box3(
+        new THREE.Vector3(hx - 6.5, 0, hz - 5.5),
+        new THREE.Vector3(hx + 6.5, 6, hz + 6.5)
+      );
+      this.colliders.push(box);
+      this.obstacles.push({ box, type: 'building' });
+    }
+  }
+
+  // === SOCAL CORNER GAS STATION ===
+  private buildGasStation() {
+    const gx = 80;
+    const gz = -80;
+    const group = new THREE.Group();
+    group.position.set(gx, 0, gz);
+
+    // Large Overhead Lighted Canopy (Width 22, Depth 14, Height 0.6 at y: 6.5)
+    const canopyMat = new THREE.MeshStandardMaterial({
+      color: 0x0284c7, // Vibrant blue
+      roughness: 0.3,
+      metalness: 0.6,
+      emissive: 0x0284c7,
+      emissiveIntensity: 0.25,
+    });
+    const canopy = new THREE.Mesh(new THREE.BoxGeometry(22, 0.8, 14), canopyMat);
+    canopy.position.y = 6.2;
+    group.add(canopy);
+
+    // Canopy Brand Sign
+    const signTex = this.createSignTexture('SOCAL 76 FUEL', '#0369a1', '#facc15');
+    const signMat = new THREE.MeshStandardMaterial({ map: signTex, roughness: 0.3 });
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(16, 2.2, 0.2), signMat);
+    sign.position.set(0, 6.2, 7.1);
+    group.add(sign);
+
+    // 4 Support Steel Pillars
+    const pillarMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.8 });
+    const pillarCoords = [
+      [-8, -4], [8, -4],
+      [-8, 4], [8, 4],
+    ];
+    for (const [px, pz] of pillarCoords) {
+      const col = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 6, 8), pillarMat);
+      col.position.set(px, 3, pz);
+      group.add(col);
+    }
+
+    // Two Fuel Pump Islands
+    const islandMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.8 });
+    const pumpMat = new THREE.MeshStandardMaterial({ color: 0xef4444, metalness: 0.7, roughness: 0.3 });
+
+    for (const pz of [-3.5, 3.5]) {
+      const island = new THREE.Mesh(new THREE.BoxGeometry(12, 0.35, 2.2), islandMat);
+      island.position.set(0, 0.175, pz);
+      group.add(island);
+
+      // Pumps on island
+      for (const px of [-3.5, 3.5]) {
+        const pump = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.4, 0.8), pumpMat);
+        pump.position.set(px, 1.4, pz);
+        group.add(pump);
+      }
+    }
+
+    // Mini-Mart Convenience Store Building behind pumps
+    const storeMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.6 });
+    const store = new THREE.Mesh(new THREE.BoxGeometry(18, 5.5, 12), storeMat);
+    store.position.set(0, 2.75, -16);
+    group.add(store);
+
+    // Glass storefront
+    const glassMat = new THREE.MeshStandardMaterial({
+      color: 0x7dd3fc,
+      transparent: true,
+      opacity: 0.6,
+      roughness: 0.1,
+      metalness: 0.9,
+    });
+    const glass = new THREE.Mesh(new THREE.BoxGeometry(14, 3.5, 0.2), glassMat);
+    glass.position.set(0, 2.5, -9.9);
+    group.add(glass);
+
+    this.scene.add(group);
+
+    const box = new THREE.Box3(
+      new THREE.Vector3(gx - 11, 0, gz - 22),
+      new THREE.Vector3(gx + 11, 7, gz + 8)
+    );
+    this.colliders.push(box);
+    this.obstacles.push({ box, type: 'building' });
+  }
+
+  // === BATTLE ROYALE TRAINING GROUNDS & TARGET RANGE ===
+  private buildTrainingGrounds() {
+    const tx = 110;
+    const tz = 80;
+    const group = new THREE.Group();
+    group.position.set(tx, 0, tz);
+
+    // Range Dirt Ground Pad
+    const dirtMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.95 });
+    const dirtPad = new THREE.Mesh(new THREE.PlaneGeometry(50, 45), dirtMat);
+    dirtPad.rotation.x = -Math.PI / 2;
+    dirtPad.position.y = 0.03;
+    group.add(dirtPad);
+
+    // Shooting Lane Barriers (Sandbags)
+    const sandbagMat = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.9 });
+    for (let i = 0; i < 5; i++) {
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(4.5, 1.1, 0.8), sandbagMat);
+      wall.position.set(-16 + i * 8, 0.55, 16);
+      group.add(wall);
+    }
+
+    // Cardboard Pop-up Target Dummies at various ranges
+    const targetMat = new THREE.MeshStandardMaterial({ color: 0xfef08a, roughness: 0.8 });
+    const bullseyeMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < 4; c++) {
+        const dummyGroup = new THREE.Group();
+        dummyGroup.position.set(-12 + c * 8, 0, 6 - r * 8);
+
+        const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.8, 8), sandbagMat);
+        stand.position.y = 0.9;
+        dummyGroup.add(stand);
+
+        const silhouette = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.4, 0.08), targetMat);
+        silhouette.position.y = 2.0;
+        dummyGroup.add(silhouette);
+
+        const bullseye = new THREE.Mesh(new THREE.CircleGeometry(0.2, 12), bullseyeMat);
+        bullseye.position.set(0, 2.2, 0.05);
+        dummyGroup.add(bullseye);
+
+        group.add(dummyGroup);
+      }
+    }
+
+    // Obstacle Hurdles (Crates stack)
+    const crateMat = new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.85 });
+    for (let i = 0; i < 4; i++) {
+      const crate = new THREE.Mesh(new THREE.BoxGeometry(2.0, 2.0, 2.0), crateMat);
+      crate.position.set(16, 1.0, -10 + i * 5);
+      group.add(crate);
+    }
+
+    this.scene.add(group);
+  }
+
+  // === INDUSTRIAL WAREHOUSES ===
+  private buildIndustrialWarehouses() {
+    const wx = -90;
+    const wz = 90;
+
+    for (let i = 0; i < 2; i++) {
+      const posX = wx + i * 36;
+      const posZ = wz;
+
+      const group = new THREE.Group();
+      group.position.set(posX, 0, posZ);
+
+      // Corrugated Metal Warehouse Body (Width 28, Height 11, Depth 22)
+      const metalMat = new THREE.MeshStandardMaterial({
+        color: i === 0 ? 0x475569 : 0x334155,
+        metalness: 0.7,
+        roughness: 0.45,
+      });
+      const wh = new THREE.Mesh(new THREE.BoxGeometry(28, 11, 22), metalMat);
+      wh.position.y = 5.5;
+      group.add(wh);
+
+      // Pitched Industrial Roof
+      const roofMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.6 });
+      const roofGeo = new THREE.ConeGeometry(22, 4.5, 4);
+      const roof = new THREE.Mesh(roofGeo, roofMat);
+      roof.rotation.y = Math.PI / 4;
+      roof.position.y = 11 + 2.25;
+      group.add(roof);
+
+      // Roll-up Cargo Door
+      const doorMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.85, roughness: 0.3 });
+      const rollDoor = new THREE.Mesh(new THREE.BoxGeometry(8, 6.5, 0.2), doorMat);
+      rollDoor.position.set(0, 3.25, 11.1);
+      group.add(rollDoor);
+
+      this.scene.add(group);
+
+      const box = new THREE.Box3(
+        new THREE.Vector3(posX - 14.5, 0, posZ - 11.5),
+        new THREE.Vector3(posX + 14.5, 14, posZ + 11.5)
+      );
+      this.colliders.push(box);
+      this.obstacles.push({ box, type: 'building' });
+    }
+  }
+
   // Set night or day lighting on streetlights and windows
   public setNightMode(isNight: boolean) {
     for (const sl of this.streetLights) {
@@ -1027,3 +1309,4 @@ export class CityBuilder {
     return false;
   }
 }
+

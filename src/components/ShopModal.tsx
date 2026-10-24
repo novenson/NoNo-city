@@ -45,7 +45,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({
                 {type === 'wardrobe' && 'PENTHOUSE 101 WARDROBE'}
               </h2>
               <div className="text-xs text-slate-400">
-                Cash Available: <span className="font-mono font-bold text-emerald-400">${playerStats.cash.toLocaleString()}</span>
+                Cash Available: <span className="font-mono font-bold text-emerald-400">${(playerStats.cash ?? playerStats.gold).toLocaleString()}</span>
               </div>
             </div>
           </div>
@@ -65,8 +65,8 @@ export const ShopModal: React.FC<ShopModalProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {Object.values(playerStats.ownedWeapons).map(wep => {
                 if (wep.id === 'fists') return null;
-                const canAfford = playerStats.cash >= wep.price;
-                const canAffordAmmo = playerStats.cash >= 200;
+                const canAfford = (playerStats.cash ?? playerStats.gold) >= wep.price;
+                const canAffordAmmo = (playerStats.cash ?? playerStats.gold) >= 200;
 
                 return (
                   <div key={wep.id} className="p-4 rounded-2xl bg-slate-800/80 border border-slate-700 flex flex-col justify-between gap-3">
@@ -110,8 +110,8 @@ export const ShopModal: React.FC<ShopModalProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {Object.values(VEHICLE_PRESETS).map(car => {
                 if (car.category === 'police') return null;
-                const isOwned = playerStats.ownedVehicles.includes(car.id);
-                const canAfford = playerStats.cash >= car.price;
+                const isOwned = playerStats.ownedVehicles ? !!playerStats.ownedVehicles[car.id] : false;
+                const canAfford = (playerStats.cash ?? playerStats.gold) >= car.price;
 
                 return (
                   <div key={car.id} className="p-4 rounded-2xl bg-slate-800/80 border border-slate-700 flex flex-col justify-between gap-3">

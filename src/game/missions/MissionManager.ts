@@ -222,14 +222,15 @@ export class MissionManager {
         [45, 0, -60],
         [-45, 0, -60],
       ];
-      const currentTarget = checkpoints[this.activeMission.stage - 1];
-      const dist = playerPos.distanceTo(new THREE.Vector3(...currentTarget));
+      const stage = this.activeMission.stage ?? 1;
+      const currentTarget = checkpoints[stage - 1] || checkpoints[0];
+      const dist = playerPos.distanceTo(new THREE.Vector3(currentTarget[0], currentTarget[1], currentTarget[2]));
 
       if (dist < 14) {
-        if (this.activeMission.stage < checkpoints.length) {
-          this.activeMission.stage++;
-          this.activeMission.targetPos = checkpoints[this.activeMission.stage - 1];
-          this.activeMission.objectiveText = `Hit Checkpoint ${this.activeMission.stage} of 4!`;
+        if (stage < checkpoints.length) {
+          this.activeMission.stage = stage + 1;
+          this.activeMission.targetPos = checkpoints[stage] as [number, number, number];
+          this.activeMission.objectiveText = `Hit Checkpoint ${stage + 1} of 4!`;
           this.updateMarkerPosition();
           soundEngine.playCashRegister();
         } else {
@@ -261,14 +262,15 @@ export class MissionManager {
       if (this.missionMarkerMesh) this.missionMarkerMesh.visible = false;
       return;
     }
-    this.missionMarkerMesh.position.set(...this.activeMission.targetPos);
+    const [tx, ty, tz] = this.activeMission.targetPos;
+    this.missionMarkerMesh.position.set(tx, ty, tz);
     this.missionMarkerMesh.visible = true;
   }
 
   private completeMission(): { completed: boolean; failed: boolean; reward: number } {
     if (!this.activeMission) return { completed: false, failed: false, reward: 0 };
 
-    const reward = this.activeMission.rewardCash;
+    const reward = this.activeMission.rewardCash ?? 1000;
     soundEngine.playMissionFanfare(true);
     soundEngine.playCashRegister();
 

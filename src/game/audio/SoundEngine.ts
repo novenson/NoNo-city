@@ -112,24 +112,23 @@ export class SoundEngine {
     if (!this.ctx || !this.sfxGain || this.isMuted) return;
     const now = this.ctx.currentTime;
 
-    if (weapon === 'fists') {
-      // Punch swoosh + impact
+    if (weapon === 'fists' || weapon === 'katana') {
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(160, now);
-      osc.frequency.exponentialRampToValueAtTime(40, now + 0.12);
-      gain.gain.setValueAtTime(0.2, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+      osc.type = weapon === 'katana' ? 'sawtooth' : 'sine';
+      osc.frequency.setValueAtTime(weapon === 'katana' ? 880 : 160, now);
+      osc.frequency.exponentialRampToValueAtTime(weapon === 'katana' ? 120 : 40, now + 0.15);
+      gain.gain.setValueAtTime(0.25, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
       osc.connect(gain);
       gain.connect(this.sfxGain);
       osc.start();
-      osc.stop(now + 0.13);
+      osc.stop(now + 0.16);
       return;
     }
 
     // Gunshot noise burst
-    const bufferSize = this.ctx.sampleRate * 0.25;
+    const bufferSize = this.ctx.sampleRate * 0.35;
     const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
     const data = buffer.getChannelData(0);
     for (let i = 0; i < bufferSize; i++) {
@@ -142,35 +141,45 @@ export class SoundEngine {
     const filter = this.ctx.createBiquadFilter();
     const gain = this.ctx.createGain();
 
-    let duration = 0.2;
+    let duration = 0.22;
     let baseGain = 0.35;
+    let thumpFreq = 180;
 
-    if (weapon === 'pistol') {
+    if (weapon === 'm1887' || weapon === 'spas12' || weapon === 'mag7') {
+      // Shotguns: massive dual-frequency blast
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(800, now);
+      gain.gain.setValueAtTime(0.65, now);
+      duration = 0.38;
+      thumpFreq = 120;
+    } else if (weapon === 'deagle') {
+      // Desert Eagle heavy hand cannon
       filter.type = 'bandpass';
-      filter.frequency.setValueAtTime(1400, now);
-      gain.gain.setValueAtTime(0.35, now);
-      duration = 0.18;
-    } else if (weapon === 'smg') {
-      filter.type = 'bandpass';
-      filter.frequency.setValueAtTime(1800, now);
-      gain.gain.setValueAtTime(0.28, now);
-      duration = 0.14;
-    } else if (weapon === 'rifle') {
-      filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(2200, now);
-      gain.gain.setValueAtTime(0.4, now);
-      duration = 0.25;
-    } else if (weapon === 'shotgun') {
-      filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(1000, now);
-      gain.gain.setValueAtTime(0.5, now);
-      duration = 0.35;
-    } else {
-      // Sniper
-      filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(3000, now);
+      filter.frequency.setValueAtTime(1100, now);
       gain.gain.setValueAtTime(0.55, now);
+      duration = 0.28;
+      thumpFreq = 140;
+    } else if (weapon === 'awm') {
+      // AWM heavy sniper crack
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(2600, now);
+      gain.gain.setValueAtTime(0.7, now);
       duration = 0.45;
+      thumpFreq = 90;
+    } else if (weapon === 'ump45' || weapon === 'mp5x' || weapon === 'vector') {
+      // SMGs: snappy rapid crack
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(1900, now);
+      gain.gain.setValueAtTime(0.28, now);
+      duration = 0.12;
+      thumpFreq = 200;
+    } else {
+      // Assault rifles: punchy crack
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(2100, now);
+      gain.gain.setValueAtTime(0.42, now);
+      duration = 0.22;
+      thumpFreq = 160;
     }
 
     gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
@@ -179,9 +188,9 @@ export class SoundEngine {
     const thump = this.ctx.createOscillator();
     const thumpGain = this.ctx.createGain();
     thump.type = 'sine';
-    thump.frequency.setValueAtTime(180, now);
-    thump.frequency.exponentialRampToValueAtTime(35, now + duration * 0.7);
-    thumpGain.gain.setValueAtTime(baseGain * 0.8, now);
+    thump.frequency.setValueAtTime(thumpFreq, now);
+    thump.frequency.exponentialRampToValueAtTime(30, now + duration * 0.7);
+    thumpGain.gain.setValueAtTime(baseGain * 0.9, now);
     thumpGain.gain.exponentialRampToValueAtTime(0.001, now + duration * 0.7);
 
     noise.connect(filter);
@@ -196,6 +205,101 @@ export class SoundEngine {
     thump.start(now);
     thump.stop(now + duration);
   }
+
+  // === FREE FIRE COMBAT FEEDBACK SOUNDS ===
+  public playHitMarker(isHeadshot: boolean = false) {
+    this.initContext();
+    if (!this.ctx || !this.sfxGain || this.isMuted) return;
+    const now = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    if (isHeadshot) {
+      // Sharp metallic ding (Free Fire headshot feedback!)
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(1800, now);
+      osc.frequency.setValueAtTime(2400, now + 0.04);
+      gain.gain.setValueAtTime(0.35, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+      osc.start(now);
+      osc.stop(now + 0.2);
+    } else {
+      // Soft body hit tick
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(800, now);
+      osc.frequency.exponentialRampToValueAtTime(300, now + 0.06);
+      gain.gain.setValueAtTime(0.18, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+      osc.start(now);
+      osc.stop(now + 0.07);
+    }
+
+    osc.connect(gain);
+    gain.connect(this.sfxGain);
+  }
+
+  public playGlooWall() {
+    this.initContext();
+    if (!this.ctx || !this.sfxGain || this.isMuted) return;
+    const now = this.ctx.currentTime;
+
+    // Crystal ice impact
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(320, now);
+    osc.frequency.linearRampToValueAtTime(750, now + 0.1);
+    gain.gain.setValueAtTime(0.3, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+    osc.connect(gain);
+    gain.connect(this.sfxGain);
+    osc.start(now);
+    osc.stop(now + 0.26);
+  }
+
+  public playMedkit() {
+    this.initContext();
+    if (!this.ctx || !this.sfxGain || this.isMuted) return;
+    const now = this.ctx.currentTime;
+
+    // Healing chime
+    [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
+      const osc = this.ctx!.createOscillator();
+      const gain = this.ctx!.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now + i * 0.08);
+      gain.gain.setValueAtTime(0.12, now + i * 0.08);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.25);
+      osc.connect(gain);
+      gain.connect(this.sfxGain!);
+      osc.start(now + i * 0.08);
+      osc.stop(now + i * 0.08 + 0.26);
+    });
+  }
+
+  public playBooyah() {
+    this.initContext();
+    if (!this.ctx || !this.sfxGain || this.isMuted) return;
+    const now = this.ctx.currentTime;
+
+    // Epic Victory Fanfare
+    const notes = [440, 554.37, 659.25, 880, 1108.73];
+    notes.forEach((freq, idx) => {
+      const osc = this.ctx!.createOscillator();
+      const gain = this.ctx!.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(freq, now + idx * 0.15);
+      gain.gain.setValueAtTime(0, now + idx * 0.15);
+      gain.gain.linearRampToValueAtTime(0.28, now + idx * 0.15 + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.15 + 0.6);
+      osc.connect(gain);
+      gain.connect(this.sfxGain!);
+      osc.start(now + idx * 0.15);
+      osc.stop(now + idx * 0.15 + 0.65);
+    });
+  }
+
 
   public playReload() {
     this.initContext();

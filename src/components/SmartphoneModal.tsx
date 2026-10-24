@@ -176,8 +176,8 @@ export const SmartphoneModal: React.FC<SmartphoneModalProps> = ({
                 Order any vehicle delivered immediately to your street coordinates.
               </p>
               <div className="space-y-2.5 flex-1 overflow-y-auto">
-                {playerStats.ownedVehicles.map(vId => {
-                  const car = VEHICLE_PRESETS[vId];
+                {(playerStats.ownedVehicles ? Object.keys(playerStats.ownedVehicles) : ['cruiser', 'hyperion']).map((vId: string) => {
+                  const car = VEHICLE_PRESETS[vId as keyof typeof VEHICLE_PRESETS];
                   if (!car) return null;
                   return (
                     <div key={vId} className="p-3 rounded-xl bg-slate-800/90 border border-slate-700 flex items-center justify-between">
@@ -227,7 +227,7 @@ export const SmartphoneModal: React.FC<SmartphoneModalProps> = ({
                         <div className="text-[10px] text-amber-400 font-semibold">Client: {m.client}</div>
                       </div>
                       <span className="text-[11px] font-mono font-bold text-emerald-400">
-                        +${m.rewardCash.toLocaleString()}
+                        +${(m.rewardCash ?? m.rewardGold ?? 1000).toLocaleString()}
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-300 mt-1 leading-snug">{m.description}</p>
@@ -265,7 +265,7 @@ export const SmartphoneModal: React.FC<SmartphoneModalProps> = ({
                 <div className="p-6 rounded-3xl bg-gradient-to-br from-indigo-900/60 to-slate-900 border border-indigo-700/50">
                   <div className="text-xs text-indigo-300 font-medium">Liquid Balance</div>
                   <div className="text-3xl font-black font-mono text-emerald-400 mt-1">
-                    ${playerStats.cash.toLocaleString()}
+                    ${(playerStats.cash ?? playerStats.gold).toLocaleString()}
                   </div>
                   <div className="text-[10px] text-slate-400 mt-2 font-mono">ACCOUNT: #774-8890-NONO</div>
                 </div>

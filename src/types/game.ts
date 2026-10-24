@@ -1,16 +1,47 @@
-export type GameState = 'title' | 'playing' | 'paused' | 'wasted' | 'busted' | 'mission_complete' | 'shopping' | 'wardrobe' | 'dealership' | 'modshop' | 'phone';
+export type GameState = 
+  | 'lobby' 
+  | 'playing' 
+  | 'paused' 
+  | 'victory' 
+  | 'game_over' 
+  | 'map_fullscreen' 
+  | 'hud_editor' 
+  | 'vault' 
+  | 'armory' 
+  | 'emotes' 
+  | 'missions' 
+  | 'profile' 
+  | 'settings';
+
+export type GameMode = 'br_solo' | 'br_duo' | 'br_squad' | 'clash_squad' | 'training' | 'open_world';
 
 export type WeatherType = 'clear' | 'sunset' | 'night' | 'rain' | 'fog';
 
-export type WeaponType = 'fists' | 'pistol' | 'smg' | 'rifle' | 'shotgun' | 'sniper';
+export type WeaponCategory = 'shotgun' | 'smg' | 'pistol' | 'rifle' | 'sniper' | 'melee';
 
-export interface WeaponInfo {
+export type WeaponType = 
+  // Shotguns
+  | 'm1887' | 'spas12' | 'mag7'
+  // SMGs
+  | 'ump45' | 'mp5x' | 'vector'
+  // Pistols
+  | 'deagle' | 'g18' | 'usp'
+  // Rifles & Snipers
+  | 'ak47' | 'scarl' | 'm4a1' | 'awm'
+  // Melee
+  | 'fists' | 'katana';
+
+export interface WeaponStats {
   id: WeaponType;
   name: string;
-  category: string;
+  category: WeaponCategory;
   damage: number;
-  fireRate: number; // shots per sec
+  headshotMultiplier: number;
+  fireRate: number; // shots/sec
   range: number;
+  accuracy: number; // 0-100
+  recoil: number;   // 0-100
+  reloadTime: number; // seconds
   magSize: number;
   currentMag: number;
   reserveAmmo: number;
@@ -18,68 +49,151 @@ export interface WeaponInfo {
   price: number;
   unlocked: boolean;
   color: string;
+  skinName?: string;
+  description: string;
 }
 
-export type VehicleId = 'hyperion' | 'cruiser' | 'titan' | 'police' | 'phantom' | 'viper';
+export type LootType = 'weapon' | 'ammo' | 'medkit' | 'vest' | 'helmet' | 'gloowall';
 
-export interface VehicleConfig {
-  id: VehicleId;
+export interface GroundLoot {
+  id: string;
+  type: LootType;
+  weaponId?: WeaponType;
+  amount: number;
+  position: [number, number, number];
   name: string;
-  category: 'super' | 'sedan' | 'suv' | 'police' | 'tuner' | 'bike';
-  maxSpeed: number; // units/sec
-  acceleration: number;
-  braking: number;
-  handling: number;
-  durability: number;
-  price: number;
-  color: string;
-  unlocked: boolean;
+  rarity: 'common' | 'rare' | 'epic' | 'legendary';
 }
 
-export interface PlayerStats {
+export interface SquadMember {
+  id: string;
+  name: string;
+  isLeader: boolean;
+  isBot: boolean;
   health: number;
   maxHealth: number;
   armor: number;
   maxArmor: number;
-  cash: number;
-  wantedLevel: number; // 0 to 5
-  wantedProgress: number; // cooldown timer
-  currentWeapon: WeaponType;
-  ownedWeapons: Record<WeaponType, WeaponInfo>;
-  ownedVehicles: VehicleId[];
-  activeVehicleId: VehicleId | null;
+  isKnocked: boolean;
+  isDead: boolean;
+  kills: number;
+  avatar: string;
+  position: [number, number, number];
+  distance: number;
+}
+
+export interface KillFeedEntry {
+  id: string;
+  killer: string;
+  victim: string;
+  weapon: string;
+  isHeadshot: boolean;
+  timestamp: number;
+}
+
+export interface DamageNumber {
+  id: string;
+  damage: number;
+  isHeadshot: boolean;
+  pos: [number, number, number];
+  screenX: number;
+  screenY: number;
+  alpha: number;
+}
+
+export interface SafeZoneState {
+  currentCenter: [number, number];
+  currentRadius: number;
+  nextCenter: [number, number];
+  nextRadius: number;
+  phase: number;
+  maxPhases: number;
+  shrinkTimer: number;
+  isShrinking: boolean;
+  dps: number;
+}
+
+export interface PlayerStats {
+  id: string;
+  username: string;
+  avatar: string;
+  level: number;
+  xp: number;
+  xpRequired: number; // with 1.5x formula
+  rank: 'Bronze' | 'Silver' | 'Gold' | 'Platinum' | 'Diamond' | 'Heroic' | 'Grandmaster';
+  gold: number;
+  diamonds: number;
+  health: number;
+  maxHealth: number;
+  armor: number;
+  maxArmor: number;
+  gloowalls: number;
+  medkits: number;
+  isKnocked: boolean;
+  knockedTimer: number;
+  isDead: boolean;
+  kills: number;
+  damageDealt: number;
+  primaryWeapon1: WeaponType;
+  primaryWeapon2: WeaponType;
+  secondaryWeapon: WeaponType;
+  meleeWeapon: WeaponType;
+  activeSlot: 'primary1' | 'primary2' | 'secondary' | 'melee';
+  ownedWeapons: Record<WeaponType, WeaponStats>;
+  ownedOutfits: string[];
   outfitId: string;
-  hairId: string;
-  insideHome: boolean;
-  repLevel: number;
+  ownedEmotes: string[];
+  activeEmote: string | null;
+  // Career lifetime statistics
+  careerMatches: number;
+  careerWins: number;
+  careerKills: number;
+  careerDeaths: number;
+  careerHeadshots: number;
+  // Compatibility fields for open world & vehicles
+  cash?: number;
+  wantedLevel?: number;
+  insideHome?: boolean;
+  ownedVehicles?: Record<string, boolean>;
 }
 
 export interface Mission {
   id: string;
   title: string;
-  client: string;
-  description: string;
-  rewardCash: number;
-  rewardRep: number;
-  stage: number;
-  stagesCount: number;
-  objectiveText: string;
+  category?: 'daily' | 'weekly' | 'mastery';
+  description?: string;
+  progress?: number;
+  target?: number;
+  rewardGold?: number;
+  rewardDiamonds?: number;
+  rewardXp?: number;
+  rewardRep?: number;
+  claimed?: boolean;
+  // Story mode mission fields
+  client?: string;
+  rewardCash?: number;
+  completed?: boolean;
+  locked?: boolean;
+  stage?: number;
+  stagesCount?: number;
+  objectiveText?: string;
   targetPos?: [number, number, number];
   targetRadius?: number;
   timeLimit?: number;
   remainingTime?: number;
-  completed: boolean;
-  locked: boolean;
 }
 
 export interface GraphicsSettings {
-  quality: 'low' | 'medium' | 'high' | 'ultra';
+  quality: 'very_low' | 'low' | 'medium' | 'high' | 'ultra' | 'custom';
+  fpsCap: 'auto' | 30 | 60 | 90 | 120 | 144;
+  showFps: boolean;
   shadows: boolean;
   bloom: boolean;
+  renderScale: number;
   drawDistance: number;
-  trafficDensity: 'low' | 'normal' | 'high';
-  touchOpacity: number;
   cameraSensitivity: number;
+  hudScale: number;
+  hudOpacity: number;
   sfxVolume: number;
   musicVolume: number;
 }
@@ -92,21 +206,29 @@ export interface InputState {
   sprint: boolean;
   jump: boolean;
   crouch: boolean;
+  prone: boolean;
   aim: boolean;
   shoot: boolean;
   reload: boolean;
-  interact: boolean; // enter/exit car or enter building
-  horn: boolean;
-  handbrake: boolean;
+  interact: boolean;
+  gloowall: boolean;
+  heal: boolean;
   lookDeltaX: number;
   lookDeltaY: number;
 }
 
-export interface CityLocation {
-  id: string;
+export type VehicleId = 'hyperion' | 'cruiser' | 'titan' | 'police' | 'phantom' | 'viper';
+
+export interface VehicleConfig {
+  id: VehicleId;
   name: string;
-  type: 'home' | 'gunshop' | 'dealership' | 'modshop' | 'hospital' | 'police' | 'bank' | 'mission' | 'beach' | 'docks';
-  position: [number, number, number];
-  icon: string;
-  description: string;
+  category: 'super' | 'sedan' | 'suv' | 'police' | 'tuner' | 'bike';
+  maxSpeed: number;
+  acceleration: number;
+  braking: number;
+  handling: number;
+  durability: number;
+  price: number;
+  color: string;
+  unlocked: boolean;
 }

@@ -1,15 +1,26 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { GameEngine } from './game/engine/GameEngine';
-import { GameState, InputState, WeaponType, VehicleId, WeatherType, GraphicsSettings } from './types/game';
+import {
+  GameState,
+  GameMode,
+  InputState,
+  WeaponType,
+  GraphicsSettings,
+  PlayerStats,
+  SquadMember,
+  SafeZoneState,
+  KillFeedEntry,
+  DamageNumber,
+  GroundLoot,
+} from './types/game';
 import { soundEngine } from './game/audio/SoundEngine';
 import { SaveManager } from './game/save/SaveManager';
-import { TitleScreen } from './components/TitleScreen';
+import { LobbyScreen } from './components/LobbyScreen';
 import { HUD } from './components/HUD';
 import { TouchControls } from './components/TouchControls';
-import { SmartphoneModal } from './components/SmartphoneModal';
-import { ShopModal } from './components/ShopModal';
 import { PauseModal } from './components/PauseModal';
 import { AndroidGuideModal } from './components/AndroidGuideModal';
+import { WEAPON_DATABASE } from './game/weapons/WeaponDatabase';
 
 export default function App() {
   const canvasMountRef = useRef<HTMLDivElement>(null);
@@ -24,70 +35,122 @@ export default function App() {
     sprint: false,
     jump: false,
     crouch: false,
+    prone: false,
     aim: false,
     shoot: false,
     reload: false,
     interact: false,
-    horn: false,
-    handbrake: false,
+    gloowall: false,
+    heal: false,
     lookDeltaX: 0,
     lookDeltaY: 0,
   });
 
   // UI state
-  const [gameState, setGameState] = useState<GameState>('title');
-  const [hasSaveData, setHasSaveData] = useState<boolean>(false);
-  const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
+  const [gameState, setGameState] = useState<GameState>('lobby');
+  const [selectedMode, setSelectedMode] = useState<GameMode>('br_squad');
   const [showAndroidGuide, setShowAndroidGuide] = useState<boolean>(false);
   const [notification, setNotification] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
 
-  // Synchronized HUD snapshot state (updated at 10Hz to save CPU)
-  const [hudStats, setHudStats] = useState({
-    health: 100,
-    maxHealth: 100,
-    armor: 100,
-    maxArmor: 100,
-    cash: 5000,
-    wantedLevel: 0,
-    currentWeapon: 'pistol' as WeaponType,
-    speed: 0,
-    nitro: 100,
-    isDriving: false,
-    vehicleName: null as string | null,
-    vehicleConfig: null as any,
-    pos: [-45, 0, 48] as [number, number, number],
-    yaw: 0,
-    radioStation: 0,
+  // Synchronized Match & Player state (updated at 15Hz to save CPU)
+  const [playerStats, setPlayerStats] = useState<PlayerStats | null>(null);
+  const [squadMembers, setSquadMembers] = useState<SquadMember[]>([]);
+  const [aliveCount, setAliveCount] = useState<number>(20);
+  const [safeZone, setSafeZone] = useState<SafeZoneState>({
+    currentCenter: [0, 0],
+    currentRadius: 180,
+    nextCenter: [0, 0],
+    nextRadius: 90,
+    phase: 1,
+    maxPhases: 4,
+    shrinkTimer: 60,
+    isShrinking: false,
+    dps: 3,
   });
+  const [killFeed, setKillFeed] = useState<KillFeedEntry[]>([]);
+  const [damageNumbers, setDamageNumbers] = useState<DamageNumber[]>([]);
+  const [nearbyLoot, setNearbyLoot] = useState<GroundLoot[]>([]);
+  const [playerYaw, setPlayerYaw] = useState<number>(0);
+  const [currentFps, setCurrentFps] = useState<number>(60);
+  const [isVictory, setIsVictory] = useState<boolean>(false);
+  const [isDefeat, setIsDefeat] = useState<boolean>(false);
 
-  const [activeMission, setActiveMission] = useState<any>(null);
+  // Graphics & Performance settings
+  const [graphicsSettings, setGraphicsSettings] = useState<GraphicsSettings>({
+    quality: 'high',
+    fpsCap: 60,
+    showFps: true,
+    shadows: true,
+    bloom: true,
+    renderScale: 1.0,
+    drawDistance: 260,
+    cameraSensitivity: 1.0,
+    hudScale: 1.0,
+    hudOpacity: 0.95,
+    sfxVolume: 0.8,
+    musicVolume: 0.5,
+  });
 
   const showNotification = useCallback((msg: string) => {
     setNotification(msg);
-    setTimeout(() => setNotification(null), 3500);
+    setTimeout(() => setNotification(null), 3200);
   }, []);
 
-  // Initialize GameEngine
+  // Initialize GameEngine once
   useEffect(() => {
     if (!canvasMountRef.current) return;
 
     const engine = new GameEngine(canvasMountRef.current);
     engineRef.current = engine;
 
-    setHasSaveData(SaveManager.hasSave());
+    // Load saved data if present
+    const saved = SaveManager.loadGame();
+    if (saved && saved.playerStats) {
+      engine.player.stats = {
+        ...engine.player.stats,
+        ...saved.playerStats,
+        ownedWeapons: {
+          ...WEAPON_DATABASE,
+          ...(saved.playerStats.ownedWeapons || {}),
+        },
+      };
+      // Sanitize slot defaults if missing
+      if (!engine.player.stats.primaryWeapon1 || !WEAPON_DATABASE[engine.player.stats.primaryWeapon1]) {
+        engine.player.stats.primaryWeapon1 = 'ak47';
+      }
+      if (!engine.player.stats.primaryWeapon2 || !WEAPON_DATABASE[engine.player.stats.primaryWeapon2]) {
+        engine.player.stats.primaryWeapon2 = 'm1887';
+      }
+      if (!engine.player.stats.secondaryWeapon || !WEAPON_DATABASE[engine.player.stats.secondaryWeapon]) {
+        engine.player.stats.secondaryWeapon = 'deagle';
+      }
+      if (!engine.player.stats.meleeWeapon || !WEAPON_DATABASE[engine.player.stats.meleeWeapon]) {
+        engine.player.stats.meleeWeapon = 'katana';
+      }
+      if (!engine.player.stats.activeSlot) {
+        engine.player.stats.activeSlot = 'primary1';
+      }
+    }
+    setPlayerStats({ ...engine.player.stats });
 
     // Wire engine callbacks
-    engine.onStateChange = (newState: string) => {
-      setGameState(newState as GameState);
-    };
-
     engine.onNotification = (msg: string) => {
       showNotification(msg);
     };
 
-    // Keyboard event listeners
+    engine.onVictory = () => {
+      setIsVictory(true);
+      setGameState('victory');
+    };
+
+    engine.onDefeat = () => {
+      setIsDefeat(true);
+      setGameState('game_over');
+    };
+
+    // Keyboard controls
     const handleKeyDown = (e: KeyboardEvent) => {
-      // AudioContext unlock on first user gesture
       soundEngine.playFootstep();
 
       switch (e.code) {
@@ -112,68 +175,47 @@ export default function App() {
           inputState.current.sprint = true;
           break;
         case 'Space':
-          if (engine.playerVehicle) {
-            inputState.current.handbrake = true;
-          } else {
-            inputState.current.jump = true;
-          }
+          inputState.current.jump = true;
           break;
         case 'KeyC':
           inputState.current.crouch = !inputState.current.crouch;
           break;
+        case 'KeyZ':
+          inputState.current.prone = !inputState.current.prone;
+          break;
         case 'KeyE':
-        case 'Enter':
           inputState.current.interact = true;
           break;
-        case 'KeyF':
-          inputState.current.shoot = true;
+        case 'KeyQ':
+          inputState.current.gloowall = true;
+          break;
+        case 'KeyX':
+          inputState.current.heal = true;
           break;
         case 'KeyR':
           inputState.current.reload = true;
           break;
-        case 'KeyH':
-          inputState.current.horn = true;
+        case 'KeyF':
+          inputState.current.shoot = true;
           break;
-        case 'Tab':
-          e.preventDefault();
-          setGameState(prev => (prev === 'phone' ? 'playing' : 'phone'));
+        case 'Digit1':
+          engine.player.switchSlot('primary1');
+          setPlayerStats({ ...engine.player.stats });
+          break;
+        case 'Digit2':
+          engine.player.switchSlot('primary2');
+          setPlayerStats({ ...engine.player.stats });
+          break;
+        case 'Digit3':
+          engine.player.switchSlot('secondary');
+          setPlayerStats({ ...engine.player.stats });
+          break;
+        case 'Digit4':
+          engine.player.switchSlot('melee');
+          setPlayerStats({ ...engine.player.stats });
           break;
         case 'Escape':
           setGameState(prev => (prev === 'paused' ? 'playing' : 'paused'));
-          break;
-        case 'Digit1':
-          engine.player.stats.currentWeapon = 'fists';
-          engine.player.updateWeaponVisual();
-          break;
-        case 'Digit2':
-          if (engine.player.stats.ownedWeapons.pistol?.unlocked) {
-            engine.player.stats.currentWeapon = 'pistol';
-            engine.player.updateWeaponVisual();
-          }
-          break;
-        case 'Digit3':
-          if (engine.player.stats.ownedWeapons.smg?.unlocked) {
-            engine.player.stats.currentWeapon = 'smg';
-            engine.player.updateWeaponVisual();
-          }
-          break;
-        case 'Digit4':
-          if (engine.player.stats.ownedWeapons.rifle?.unlocked) {
-            engine.player.stats.currentWeapon = 'rifle';
-            engine.player.updateWeaponVisual();
-          }
-          break;
-        case 'Digit5':
-          if (engine.player.stats.ownedWeapons.shotgun?.unlocked) {
-            engine.player.stats.currentWeapon = 'shotgun';
-            engine.player.updateWeaponVisual();
-          }
-          break;
-        case 'Digit6':
-          if (engine.player.stats.ownedWeapons.sniper?.unlocked) {
-            engine.player.stats.currentWeapon = 'sniper';
-            engine.player.updateWeaponVisual();
-          }
           break;
       }
     };
@@ -202,20 +244,12 @@ export default function App() {
           break;
         case 'Space':
           inputState.current.jump = false;
-          inputState.current.handbrake = false;
           break;
         case 'KeyE':
-        case 'Enter':
           inputState.current.interact = false;
           break;
         case 'KeyF':
           inputState.current.shoot = false;
-          break;
-        case 'KeyR':
-          inputState.current.reload = false;
-          break;
-        case 'KeyH':
-          inputState.current.horn = false;
           break;
       }
     };
@@ -230,10 +264,8 @@ export default function App() {
 
     const handleMouseDown = (e: MouseEvent) => {
       if (e.button === 0) {
-        // Left click
         inputState.current.shoot = true;
       } else if (e.button === 2) {
-        // Right click aim
         inputState.current.aim = true;
       }
     };
@@ -250,331 +282,274 @@ export default function App() {
       e.preventDefault();
     };
 
-    const handleBlur = () => {
-      // Clear held keys on window blur
-      inputState.current.forward = false;
-      inputState.current.backward = false;
-      inputState.current.left = false;
-      inputState.current.right = false;
-      inputState.current.sprint = false;
-      inputState.current.jump = false;
-      inputState.current.shoot = false;
-      inputState.current.aim = false;
-    };
-
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mousedown', handleMouseDown);
     window.addEventListener('mouseup', handleMouseUp);
     window.addEventListener('contextmenu', handleContextMenu);
-    window.addEventListener('blur', handleBlur);
 
-    // Frame update loop driving the physics simulation
+    // ==========================================
+    // SINGLE UNIFIED FRAME LOOP WITH FPS PACING
+    // ==========================================
     let isRunning = true;
-    let prevTime = performance.now();
+    let lastTime = performance.now();
+    let lastRenderTime = performance.now();
 
-    const gameLoop = () => {
+    const loop = (currentTime: number) => {
       if (!isRunning) return;
-      const now = performance.now();
-      const dt = Math.min((now - prevTime) / 1000, 0.05);
-      prevTime = now;
 
-      engine.update(dt, inputState.current);
+      const targetFps = engine.settings.fpsCap === 'auto' ? 144 : Number(engine.settings.fpsCap);
+      const frameInterval = 1000 / targetFps;
+      const elapsedSinceRender = currentTime - lastRenderTime;
 
-      // Reset edge deltas
-      inputState.current.lookDeltaX = 0;
-      inputState.current.lookDeltaY = 0;
+      if (elapsedSinceRender >= frameInterval - 1.0) {
+        const rawDt = (currentTime - lastTime) / 1000;
+        lastTime = currentTime;
+        lastRenderTime = currentTime;
+        const dt = Math.min(rawDt, 0.05); // 60fps simulation clamp
 
-      requestAnimationFrame(gameLoop);
+        // Run simulation update
+        engine.update(dt, inputState.current);
+
+        // Reset per-frame mouse deltas
+        inputState.current.lookDeltaX = 0;
+        inputState.current.lookDeltaY = 0;
+
+        // Render scene
+        engine.render();
+      }
+
+      requestAnimationFrame(loop);
     };
 
-    requestAnimationFrame(gameLoop);
+    requestAnimationFrame(loop);
 
-    // Periodic 10Hz sync with React HUD
-    const hudInterval = setInterval(() => {
+    // Periodic 15Hz Sync with React HUD
+    const syncInterval = setInterval(() => {
       if (!engine) return;
       const p = engine.player;
-      const v = engine.playerVehicle;
+      const br = engine.battleRoyale;
 
-      setHudStats({
-        health: p.stats.health,
-        maxHealth: p.stats.maxHealth,
-        armor: p.stats.armor,
-        maxArmor: p.stats.maxArmor,
-        cash: p.stats.cash,
-        wantedLevel: engine.police.wantedLevel,
-        currentWeapon: p.stats.currentWeapon,
-        speed: v ? v.speed : Math.hypot(p.velocity.x, p.velocity.z),
-        nitro: v ? v.nitroAmount : 100,
-        isDriving: !!v,
-        vehicleName: v ? v.config.name : null,
-        vehicleConfig: v ? v.config : null,
-        pos: [p.position.x, p.position.y, p.position.z],
-        yaw: engine.cameraYaw,
-        radioStation: soundEngine.getRadioStation(),
-      });
+      setPlayerStats({ ...p.stats });
+      setSquadMembers([...br.squadMembers]);
+      setAliveCount(br.aliveCount);
+      setSafeZone({ ...br.safeZone });
+      setKillFeed([...br.killFeed]);
+      setDamageNumbers([...br.damageNumbers]);
+      setPlayerYaw(engine.cameraYaw);
+      setCurrentFps(engine.currentFps);
 
-      setActiveMission(engine.missions.activeMission);
-    }, 100);
+      // Nearby loot detection
+      const closeLoot: GroundLoot[] = [];
+      for (const item of br.groundLoot) {
+        const d = Math.hypot(item.position[0] - p.position.x, item.position[2] - p.position.z);
+        if (d < 3.2) {
+          closeLoot.push(item);
+        }
+      }
+      setNearbyLoot(closeLoot);
+    }, 66); // ~15Hz
 
     return () => {
       isRunning = false;
-      clearInterval(hudInterval);
+      clearInterval(syncInterval);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mousedown', handleMouseDown);
       window.removeEventListener('mouseup', handleMouseUp);
       window.removeEventListener('contextmenu', handleContextMenu);
-      window.removeEventListener('blur', handleBlur);
       engine.dispose();
     };
   }, [showNotification]);
 
-  // Start new game
-  const handleStartGame = () => {
-    if (engineRef.current) {
-      engineRef.current.isTitleScreen = false;
-      // Request pointer lock on desktop if desired
-      if (!('ontouchstart' in window) && canvasMountRef.current) {
-        try {
-          canvasMountRef.current.requestPointerLock?.();
-        } catch {}
-      }
-      soundEngine.startVehicleEngine();
-      setTimeout(() => soundEngine.stopVehicleEngine(), 400); // warm audio
-    }
+  // Start match handler
+  const handleStartMatch = () => {
+    if (!engineRef.current) return;
+    setIsVictory(false);
+    setIsDefeat(false);
+    engineRef.current.startBattleRoyale(selectedMode);
     setGameState('playing');
-    showNotification('Welcome to Nono Metropolis! Explore freely or open your phone for jobs.');
-  };
 
-  // Continue from persistent local save
-  const handleContinueGame = () => {
-    const saved = SaveManager.loadGame();
-    if (saved && engineRef.current) {
-      engineRef.current.player.stats = saved.playerStats;
-      engineRef.current.player.position.set(...saved.playerPosition);
-      engineRef.current.player.mesh.position.copy(engineRef.current.player.position);
-      engineRef.current.player.updateOutfit();
-      engineRef.current.player.updateWeaponVisual();
-      engineRef.current.settings = { ...engineRef.current.settings, ...saved.settings };
-
-      // Restore missions completed
-      for (const mId of saved.missionsCompleted) {
-        const found = engineRef.current.missions.missions.find(m => m.id === mId);
-        if (found) found.completed = true;
-      }
-      showNotification('Save game successfully loaded!');
+    // Desktop pointer lock
+    if (!('ontouchstart' in window) && canvasMountRef.current) {
+      canvasMountRef.current.requestPointerLock?.();
     }
-    handleStartGame();
   };
 
-  // Save current game state
-  const handleSaveGame = () => {
+  // Return to lobby handler
+  const handleReturnToLobby = () => {
     if (!engineRef.current) return;
-    const p = engineRef.current.player;
-    const completed = engineRef.current.missions.missions.filter(m => m.completed).map(m => m.id);
-
-    const ok = SaveManager.saveGame(
-      p.stats,
-      [p.position.x, p.position.y, p.position.z],
-      completed,
-      engineRef.current.settings
-    );
-
-    if (ok) {
-      setSaveSuccess(true);
-      setHasSaveData(true);
-      soundEngine.playCashRegister();
-      setTimeout(() => setSaveSuccess(false), 2000);
-      showNotification('Progress saved to local storage!');
+    engineRef.current.returnToLobby();
+    setGameState('lobby');
+    setIsVictory(false);
+    setIsDefeat(false);
+    if (document.exitPointerLock) {
+      document.exitPointerLock();
     }
   };
 
-  // Weapon shop buy actions
-  const handleBuyWeapon = (wId: WeaponType) => {
-    if (!engineRef.current) return;
-    const p = engineRef.current.player;
-    const wep = p.stats.ownedWeapons[wId];
-    if (wep && p.stats.cash >= wep.price && !wep.unlocked) {
-      p.stats.cash -= wep.price;
-      wep.unlocked = true;
-      p.stats.currentWeapon = wId;
-      p.updateWeaponVisual();
-      soundEngine.playCashRegister();
-      showNotification(`Purchased ${wep.name}!`);
-    }
+  // Update graphics settings
+  const handleUpdateSettings = (newSettings: Partial<GraphicsSettings>) => {
+    setGraphicsSettings(prev => {
+      const updated = { ...prev, ...newSettings };
+      engineRef.current?.applyGraphicsSettings(updated);
+      return updated;
+    });
   };
 
-  const handleBuyAmmo = (wId: WeaponType) => {
-    if (!engineRef.current) return;
-    const p = engineRef.current.player;
-    const wep = p.stats.ownedWeapons[wId];
-    if (wep && p.stats.cash >= 200) {
-      p.stats.cash -= 200;
-      wep.reserveAmmo = Math.min(wep.maxAmmo, wep.reserveAmmo + wep.magSize * 2);
-      soundEngine.playReload();
-      soundEngine.playCashRegister();
-    }
-  };
-
-  // Vehicle dealership buy action
-  const handleBuyVehicle = (vId: VehicleId) => {
-    if (!engineRef.current) return;
-    const p = engineRef.current.player;
-    const carConfig = engineRef.current.parkedVehicles[0]?.config; // template
-    if (!p.stats.ownedVehicles.includes(vId)) {
-      p.stats.ownedVehicles.push(vId);
-      soundEngine.playCashRegister();
-      showNotification('New vehicle registered in your garage!');
-    }
-  };
-
-  // Outfit change action
-  const handleChangeOutfit = (outfitId: string) => {
+  // Equip outfit
+  const handleEquipOutfit = (outfitId: string) => {
     if (!engineRef.current) return;
     engineRef.current.player.stats.outfitId = outfitId;
     engineRef.current.player.updateOutfit();
-    showNotification('Outfit updated!');
+    setPlayerStats({ ...engineRef.current.player.stats });
+    showNotification(`Outfit changed to ${outfitId.toUpperCase()}`);
   };
 
-  // Car paint color action
-  const handleChangeCarColor = (hex: string) => {
+  // Equip weapon
+  const handleEquipWeapon = (slot: 'primary1' | 'primary2' | 'secondary' | 'melee', weaponId: WeaponType) => {
     if (!engineRef.current) return;
-    if (engineRef.current.playerVehicle) {
-      engineRef.current.playerVehicle.setColor(hex);
-      engineRef.current.playerVehicle.repair();
-      soundEngine.playCashRegister();
-      showNotification('Vehicle painted and fully repaired!');
-    } else {
-      showNotification('Enter a vehicle first to apply custom tuning.');
-    }
+    const p = engineRef.current.player;
+    if (slot === 'primary1') p.stats.primaryWeapon1 = weaponId;
+    else if (slot === 'primary2') p.stats.primaryWeapon2 = weaponId;
+    else if (slot === 'secondary') p.stats.secondaryWeapon = weaponId;
+    else p.stats.meleeWeapon = weaponId;
+
+    p.updateWeaponVisual();
+    setPlayerStats({ ...p.stats });
+    showNotification(`Equipped ${weaponId.toUpperCase()} to ${slot.toUpperCase()}`);
   };
 
-  // Cycle radio station
-  const handleToggleRadio = () => {
-    const cur = soundEngine.getRadioStation();
-    const next = (cur + 1) % 4;
-    soundEngine.setRadioStation(next);
+  // Play emote
+  const handlePlayEmote = (emote: string) => {
+    soundEngine.playFootstep();
+    showNotification(`Emote triggered: ${emote.toUpperCase()}`);
+  };
+
+  // Claim reward
+  const handleClaimReward = (gold: number, diamonds: number, xp: number) => {
+    if (!engineRef.current) return;
+    const p = engineRef.current.player;
+    p.stats.gold += gold;
+    p.stats.diamonds += diamonds;
+    p.stats.xp += xp;
+
+    // Check level up (1.5x formula)
+    if (p.stats.xp >= p.stats.xpRequired) {
+      p.stats.level++;
+      p.stats.xp -= p.stats.xpRequired;
+      p.stats.xpRequired = Math.round(1000 * Math.pow(1.5, p.stats.level - 1));
+      soundEngine.playBooyah();
+      showNotification(`LEVEL UP! Now Level ${p.stats.level}!`);
+    }
+
+    setPlayerStats({ ...p.stats });
+    showNotification(`Claimed +${gold} Gold and +${diamonds} Diamonds!`);
+  };
+
+  // Save game progress
+  const handleSaveGame = () => {
+    if (!engineRef.current) return;
+    SaveManager.saveGame(engineRef.current.player.stats);
+    setSaveSuccess(true);
+    setTimeout(() => setSaveSuccess(false), 2500);
+    showNotification('Game Progress Saved to Local Storage!');
   };
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-black select-none font-sans">
-      {/* Isolated Three.js WebGL Mount Container */}
+    <div className="relative w-screen h-screen bg-slate-950 overflow-hidden font-sans select-none">
+      {/* 3D WebGL Canvas Container */}
       <div
         ref={canvasMountRef}
-        className="absolute inset-0 w-full h-full cursor-crosshair"
         onClick={() => {
           if (gameState === 'playing' && !('ontouchstart' in window)) {
-            try {
-              canvasMountRef.current?.requestPointerLock?.();
-            } catch {}
+            canvasMountRef.current?.requestPointerLock?.();
           }
         }}
+        className="absolute inset-0 w-full h-full cursor-crosshair z-0"
       />
 
-      {/* Title Screen Overlay */}
-      {gameState === 'title' && (
-        <TitleScreen
-          onStartGame={handleStartGame}
-          onContinueGame={handleContinueGame}
-          hasSaveData={hasSaveData}
+      {/* === 1. FREE FIRE STYLE 3D GAME LOBBY === */}
+      {gameState === 'lobby' && playerStats && (
+        <LobbyScreen
+          playerStats={playerStats}
+          selectedMode={selectedMode}
+          onSelectMode={setSelectedMode}
+          onStartMatch={handleStartMatch}
+          onEquipOutfit={handleEquipOutfit}
+          onEquipWeapon={handleEquipWeapon}
+          onPlayEmote={handlePlayEmote}
+          onClaimReward={handleClaimReward}
+          settings={graphicsSettings}
+          onUpdateSettings={handleUpdateSettings}
           onOpenAndroidGuide={() => setShowAndroidGuide(true)}
-          onOpenSettings={() => setGameState('paused')}
         />
       )}
 
-      {/* Active In-Game Heads-Up Display */}
-      {gameState !== 'title' && engineRef.current && (
-        <HUD
-          playerStats={engineRef.current.player.stats}
-          currentVehicle={hudStats.vehicleConfig}
-          vehicleSpeed={hudStats.speed}
-          vehicleNitro={hudStats.nitro}
-          activeMission={activeMission}
-          radioStation={hudStats.radioStation}
-          onToggleRadio={handleToggleRadio}
-          onCycleWeapon={() => engineRef.current?.player.cycleWeapon()}
-          notification={notification}
-          playerPos={hudStats.pos}
-          playerYaw={hudStats.yaw}
-        />
-      )}
-
-      {/* Virtual Dual-Stick Touch Controls */}
-      {gameState === 'playing' && (
-        <TouchControls
-          inputState={inputState}
-          inVehicle={hudStats.isDriving}
-          onOpenPhone={() => setGameState('phone')}
-          onPause={() => setGameState('paused')}
-          opacity={engineRef.current?.settings.touchOpacity ?? 0.85}
-        />
-      )}
-
-      {/* Smartphone ("iNono OS") Modal */}
-      {gameState === 'phone' && engineRef.current && (
-        <SmartphoneModal
-          playerStats={engineRef.current.player.stats}
-          missions={engineRef.current.missions.missions}
-          onStartMission={mId => {
-            engineRef.current?.missions.startMission(mId);
-            setGameState('playing');
-          }}
-          onValetDeliver={vId => {
-            engineRef.current?.valetDeliverCar(vId);
-            setGameState('playing');
-          }}
-          onChangeWeather={w => {
-            if (engineRef.current) engineRef.current.weather = w;
-            setGameState('playing');
-          }}
-          onClose={() => setGameState('playing')}
-        />
-      )}
-
-      {/* Shops & Customization Modals */}
-      {(gameState === 'shopping' || gameState === 'wardrobe' || gameState === 'dealership' || gameState === 'modshop') &&
-        engineRef.current && (
-          <ShopModal
-            type={gameState}
-            playerStats={engineRef.current.player.stats}
-            onBuyWeapon={handleBuyWeapon}
-            onBuyAmmo={handleBuyAmmo}
-            onBuyVehicle={handleBuyVehicle}
-            onChangeOutfit={handleChangeOutfit}
-            onChangeCarColor={handleChangeCarColor}
-            onClose={() => setGameState('playing')}
+      {/* === 2. BATTLE ROYALE HUD === */}
+      {(gameState === 'playing' || gameState === 'victory' || gameState === 'game_over') && playerStats && (
+        <>
+          <HUD
+            playerStats={playerStats}
+            squadMembers={squadMembers}
+            aliveCount={aliveCount}
+            safeZone={safeZone}
+            killFeed={killFeed}
+            damageNumbers={damageNumbers}
+            nearbyLoot={nearbyLoot}
+            onPickupLoot={lootId => engineRef.current?.pickupLoot(lootId)}
+            onDeployGlooWall={() => {
+              inputState.current.gloowall = true;
+            }}
+            onUseMedkit={() => {
+              inputState.current.heal = true;
+            }}
+            onReload={() => {
+              inputState.current.reload = true;
+            }}
+            onSwitchSlot={slot => {
+              engineRef.current?.player.switchSlot(slot);
+              if (engineRef.current) setPlayerStats({ ...engineRef.current.player.stats });
+            }}
+            onPause={() => setGameState('paused')}
+            onReturnToLobby={handleReturnToLobby}
+            playerYaw={playerYaw}
+            isVictory={isVictory}
+            isDefeat={isDefeat}
+            fps={currentFps}
+            notification={notification}
           />
-        )}
 
-      {/* Pause Menu Modal */}
-      {gameState === 'paused' && engineRef.current && (
+          {/* On-Screen Mobile Touch Controls */}
+          {('ontouchstart' in window || window.innerWidth < 1024) && (
+            <TouchControls
+              inputState={inputState}
+              inVehicle={!!engineRef.current?.playerVehicle}
+              onPause={() => setGameState('paused')}
+              gloowallsCount={playerStats.gloowalls}
+              medkitsCount={playerStats.medkits}
+              opacity={graphicsSettings.hudOpacity}
+            />
+          )}
+        </>
+      )}
+
+      {/* === 3. PAUSE MODAL === */}
+      {gameState === 'paused' && (
         <PauseModal
-          settings={engineRef.current.settings}
-          onUpdateSettings={s => {
-            if (engineRef.current) {
-              engineRef.current.settings = { ...engineRef.current.settings, ...s };
-              if (s.sfxVolume !== undefined || s.musicVolume !== undefined) {
-                soundEngine.setVolumes(engineRef.current.settings.sfxVolume, engineRef.current.settings.musicVolume);
-              }
-            }
-          }}
+          settings={graphicsSettings}
+          onUpdateSettings={handleUpdateSettings}
           onResume={() => setGameState('playing')}
           onSaveGame={handleSaveGame}
-          onQuitToTitle={() => {
-            if (engineRef.current) engineRef.current.isTitleScreen = true;
-            setGameState('title');
-          }}
+          onQuitToTitle={handleReturnToLobby}
           saveSuccess={saveSuccess}
         />
       )}
 
-      {/* Android & APK Instructions Modal */}
-      {showAndroidGuide && (
-        <AndroidGuideModal onClose={() => setShowAndroidGuide(false)} />
-      )}
+      {/* === 4. ANDROID APK BUILD GUIDE MODAL === */}
+      {showAndroidGuide && <AndroidGuideModal onClose={() => setShowAndroidGuide(false)} />}
     </div>
   );
 }

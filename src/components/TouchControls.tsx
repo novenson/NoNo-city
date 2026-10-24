@@ -1,20 +1,31 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState } from 'react';
 import { InputState } from '../types/game';
-import { Car, Zap, ArrowUp, Crosshair, Target, Smartphone, Menu, Disc } from 'lucide-react';
+import {
+  Car,
+  Target,
+  Crosshair,
+  ArrowUp,
+  Shield,
+  Plus,
+  RotateCcw,
+  Menu,
+} from 'lucide-react';
 
 interface TouchControlsProps {
   inputState: React.MutableRefObject<InputState>;
   inVehicle: boolean;
-  onOpenPhone: () => void;
   onPause: () => void;
+  gloowallsCount: number;
+  medkitsCount: number;
   opacity: number;
 }
 
 export const TouchControls: React.FC<TouchControlsProps> = ({
   inputState,
   inVehicle,
-  onOpenPhone,
   onPause,
+  gloowallsCount,
+  medkitsCount,
   opacity,
 }) => {
   const [stickPos, setStickPos] = useState({ x: 0, y: 0 });
@@ -50,14 +61,14 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
 
     setStickPos({ x: clampedX, y: clampedY });
 
-    // Normalize to -1 to 1 input
     const normX = clampedX / maxRadius;
     const normY = clampedY / maxRadius;
 
-    inputState.current.forward = normY < -0.3;
-    inputState.current.backward = normY > 0.3;
-    inputState.current.left = normX < -0.3;
-    inputState.current.right = normX > 0.3;
+    inputState.current.forward = normY < -0.25;
+    inputState.current.backward = normY > 0.25;
+    inputState.current.left = normX < -0.25;
+    inputState.current.right = normX > 0.25;
+    inputState.current.sprint = normY < -0.7; // Sprint lock when pushing up fully
   };
 
   const handleStickEnd = () => {
@@ -67,13 +78,14 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
     inputState.current.backward = false;
     inputState.current.left = false;
     inputState.current.right = false;
+    inputState.current.sprint = false;
   };
 
   // Right-side Camera Touch Swipe look
   const handleLookStart = (e: React.TouchEvent) => {
     for (let i = 0; i < e.changedTouches.length; i++) {
       const t = e.changedTouches[i];
-      if (t.clientX > window.innerWidth / 2) {
+      if (t.clientX > window.innerWidth / 2.2) {
         lookTouchIdRef.current = t.identifier;
         lastLookPosRef.current = { x: t.clientX, y: t.clientY };
         break;
@@ -106,10 +118,7 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
   };
 
   return (
-    <div
-      className="absolute inset-0 pointer-events-none select-none z-30"
-      style={{ opacity }}
-    >
+    <div className="absolute inset-0 pointer-events-none select-none z-30" style={{ opacity }}>
       {/* Right-half Camera swipe look surface */}
       <div
         className="absolute top-0 right-0 w-1/2 h-3/4 pointer-events-auto"
@@ -118,19 +127,12 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
         onTouchEnd={handleLookEnd}
       />
 
-      {/* Top right quick actions: Phone & Pause */}
-      <div className="absolute top-4 right-4 flex items-center gap-2 pointer-events-auto">
-        <button
-          onClick={onOpenPhone}
-          className="w-11 h-11 rounded-2xl bg-slate-900/90 border border-slate-700 flex items-center justify-center text-sky-400 active:scale-95 transition shadow-lg"
-          title="Open Smartphone"
-        >
-          <Smartphone className="w-5 h-5" />
-        </button>
+      {/* Top right quick pause button */}
+      <div className="absolute top-4 right-4 pointer-events-auto">
         <button
           onClick={onPause}
-          className="w-11 h-11 rounded-2xl bg-slate-900/90 border border-slate-700 flex items-center justify-center text-slate-300 active:scale-95 transition shadow-lg"
-          title="Pause Menu"
+          className="w-10 h-10 rounded-xl bg-slate-900/90 border border-slate-700 flex items-center justify-center text-slate-300 active:scale-95 transition shadow-lg"
+          title="Pause"
         >
           <Menu className="w-5 h-5" />
         </button>
@@ -144,9 +146,8 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
           onTouchMove={handleStickMove}
           onTouchEnd={handleStickEnd}
         >
-          {/* Inner thumb nub */}
           <div
-            className="w-14 h-14 rounded-full bg-gradient-to-tr from-sky-600 to-sky-400 border border-sky-300 shadow-md transform transition-transform"
+            className="w-14 h-14 rounded-full bg-gradient-to-tr from-amber-600 to-amber-400 border border-amber-300 shadow-md transform transition-transform"
             style={{
               transform: `translate(${stickPos.x}px, ${stickPos.y}px)`,
             }}
@@ -154,95 +155,126 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
         </div>
       </div>
 
-      {/* Bottom-Right: Dedicated Action Buttons Cluster */}
-      <div className="absolute bottom-6 right-6 pointer-events-auto flex flex-col items-end gap-3">
-        {/* Upper Action Row: Aim & Shoot / Nitro */}
-        <div className="flex items-center gap-3">
+      {/* Bottom-Right: Modern Battle Royale Action Cluster */}
+      <div className="absolute bottom-6 right-6 pointer-events-auto flex flex-col items-end gap-2.5">
+        {/* Upper Action Row: Enter Car & Gloo Wall & Medkit */}
+        <div className="flex items-center gap-2">
           {/* Enter / Exit Car Button */}
           <button
             onTouchStart={() => (inputState.current.interact = true)}
             onTouchEnd={() => (inputState.current.interact = false)}
             onMouseDown={() => (inputState.current.interact = true)}
             onMouseUp={() => (inputState.current.interact = false)}
-            className="w-14 h-14 rounded-2xl bg-amber-500/90 border border-amber-300 text-slate-950 font-bold flex flex-col items-center justify-center active:scale-95 transition shadow-xl"
+            className="w-12 h-12 rounded-2xl bg-amber-500/90 border border-amber-300 text-slate-950 font-bold flex flex-col items-center justify-center active:scale-90 transition shadow-xl"
           >
-            <Car className="w-6 h-6" />
-            <span className="text-[9px] font-black">{inVehicle ? 'EXIT' : 'DRIVE'}</span>
+            <Car className="w-5 h-5" />
+            <span className="text-[8px] font-black">{inVehicle ? 'EXIT' : 'DRIVE'}</span>
           </button>
 
-          {/* Aim or Horn */}
+          {/* Gloo Wall Deploy */}
           <button
-            onTouchStart={() => {
-              if (inVehicle) inputState.current.horn = true;
-              else inputState.current.aim = true;
-            }}
-            onTouchEnd={() => {
-              if (inVehicle) inputState.current.horn = false;
-              else inputState.current.aim = false;
-            }}
-            onMouseDown={() => {
-              if (inVehicle) inputState.current.horn = true;
-              else inputState.current.aim = true;
-            }}
-            onMouseUp={() => {
-              if (inVehicle) inputState.current.horn = false;
-              else inputState.current.aim = false;
-            }}
-            className="w-14 h-14 rounded-2xl bg-slate-900/90 border border-slate-700 text-sky-400 flex flex-col items-center justify-center active:scale-95 transition shadow-lg"
+            onTouchStart={() => (inputState.current.gloowall = true)}
+            onTouchEnd={() => (inputState.current.gloowall = false)}
+            onMouseDown={() => (inputState.current.gloowall = true)}
+            onMouseUp={() => (inputState.current.gloowall = false)}
+            className="w-12 h-12 rounded-2xl bg-sky-600/90 border border-sky-400 text-white flex flex-col items-center justify-center active:scale-90 transition shadow-lg"
           >
-            {inVehicle ? <Disc className="w-6 h-6" /> : <Crosshair className="w-6 h-6" />}
-            <span className="text-[9px] font-bold">{inVehicle ? 'HORN' : 'AIM'}</span>
+            <Shield className="w-5 h-5 text-sky-200" />
+            <span className="text-[8px] font-black">GLOO ({gloowallsCount})</span>
           </button>
 
-          {/* Fire / Punch Button */}
+          {/* Medkit Heal */}
+          <button
+            onTouchStart={() => (inputState.current.heal = true)}
+            onTouchEnd={() => (inputState.current.heal = false)}
+            onMouseDown={() => (inputState.current.heal = true)}
+            onMouseUp={() => (inputState.current.heal = false)}
+            className="w-12 h-12 rounded-2xl bg-emerald-600/90 border border-emerald-400 text-white flex flex-col items-center justify-center active:scale-90 transition shadow-lg"
+          >
+            <Plus className="w-5 h-5 text-emerald-200" />
+            <span className="text-[8px] font-black">HEAL ({medkitsCount})</span>
+          </button>
+
+          {/* Reload Button */}
+          <button
+            onTouchStart={() => (inputState.current.reload = true)}
+            onTouchEnd={() => (inputState.current.reload = false)}
+            onMouseDown={() => (inputState.current.reload = true)}
+            onMouseUp={() => (inputState.current.reload = false)}
+            className="w-12 h-12 rounded-2xl bg-slate-800/90 border border-slate-600 text-amber-400 flex flex-col items-center justify-center active:scale-90 transition shadow-lg"
+          >
+            <RotateCcw className="w-5 h-5" />
+            <span className="text-[8px] font-black">RELOAD</span>
+          </button>
+        </div>
+
+        {/* Middle Action Row: ADS Aim & Fire Button */}
+        <div className="flex items-center gap-3">
+          {/* ADS Aim Down Sights (Toggle or Hold) */}
+          <button
+            onTouchStart={() => (inputState.current.aim = !inputState.current.aim)}
+            onMouseDown={() => (inputState.current.aim = !inputState.current.aim)}
+            className={`w-14 h-14 rounded-2xl border flex flex-col items-center justify-center active:scale-90 transition shadow-xl ${
+              inputState.current.aim
+                ? 'bg-amber-500 border-amber-300 text-slate-950 font-black'
+                : 'bg-slate-900/90 border-slate-700 text-sky-400'
+            }`}
+          >
+            <Crosshair className="w-6 h-6" />
+            <span className="text-[9px] font-black">SCOPE</span>
+          </button>
+
+          {/* Giant Fire Button */}
           <button
             onTouchStart={() => (inputState.current.shoot = true)}
             onTouchEnd={() => (inputState.current.shoot = false)}
             onMouseDown={() => (inputState.current.shoot = true)}
             onMouseUp={() => (inputState.current.shoot = false)}
-            className="w-16 h-16 rounded-3xl bg-rose-600/90 border border-rose-400 text-white flex flex-col items-center justify-center active:scale-95 transition shadow-xl"
+            className="w-18 h-18 rounded-3xl bg-gradient-to-tr from-red-600 to-rose-500 border-2 border-rose-300 text-white flex flex-col items-center justify-center active:scale-90 transition shadow-[0_0_25px_rgba(239,68,68,0.6)]"
           >
-            <Target className="w-7 h-7" />
-            <span className="text-[9px] font-black">{inVehicle ? 'FIRE' : 'FIRE'}</span>
+            <Target className="w-8 h-8" />
+            <span className="text-[10px] font-black tracking-wider">FIRE</span>
           </button>
         </div>
 
-        {/* Lower Action Row: Sprint/Nitro & Jump/Handbrake */}
-        <div className="flex items-center gap-3">
-          {/* Sprint / Nitro */}
+        {/* Lower Action Row: Stances (Prone, Crouch, Jump) */}
+        <div className="flex items-center gap-2">
+          {/* Prone crawl */}
           <button
-            onTouchStart={() => (inputState.current.sprint = true)}
-            onTouchEnd={() => (inputState.current.sprint = false)}
-            onMouseDown={() => (inputState.current.sprint = true)}
-            onMouseUp={() => (inputState.current.sprint = false)}
-            className="w-13 h-13 rounded-2xl bg-indigo-600/90 border border-indigo-400 text-white flex flex-col items-center justify-center active:scale-95 transition shadow-lg"
+            onTouchStart={() => (inputState.current.prone = !inputState.current.prone)}
+            onMouseDown={() => (inputState.current.prone = !inputState.current.prone)}
+            className={`w-11 h-11 rounded-xl border flex items-center justify-center text-xs font-black transition active:scale-90 ${
+              inputState.current.prone
+                ? 'bg-amber-500 text-slate-950 border-amber-300'
+                : 'bg-slate-900/90 text-slate-300 border-slate-700'
+            }`}
           >
-            <Zap className="w-5 h-5 text-amber-300" />
-            <span className="text-[9px] font-bold">{inVehicle ? 'NITRO' : 'RUN'}</span>
+            PRONE
           </button>
 
-          {/* Jump / Handbrake */}
+          {/* Crouch */}
           <button
-            onTouchStart={() => {
-              if (inVehicle) inputState.current.handbrake = true;
-              else inputState.current.jump = true;
-            }}
-            onTouchEnd={() => {
-              if (inVehicle) inputState.current.handbrake = false;
-              else inputState.current.jump = false;
-            }}
-            onMouseDown={() => {
-              if (inVehicle) inputState.current.handbrake = true;
-              else inputState.current.jump = true;
-            }}
-            onMouseUp={() => {
-              if (inVehicle) inputState.current.handbrake = false;
-              else inputState.current.jump = false;
-            }}
-            className="w-14 h-14 rounded-2xl bg-sky-600/90 border border-sky-400 text-white flex flex-col items-center justify-center active:scale-95 transition shadow-lg"
+            onTouchStart={() => (inputState.current.crouch = !inputState.current.crouch)}
+            onMouseDown={() => (inputState.current.crouch = !inputState.current.crouch)}
+            className={`w-11 h-11 rounded-xl border flex items-center justify-center text-xs font-black transition active:scale-90 ${
+              inputState.current.crouch
+                ? 'bg-amber-500 text-slate-950 border-amber-300'
+                : 'bg-slate-900/90 text-slate-300 border-slate-700'
+            }`}
+          >
+            CROUCH
+          </button>
+
+          {/* Jump */}
+          <button
+            onTouchStart={() => (inputState.current.jump = true)}
+            onTouchEnd={() => (inputState.current.jump = false)}
+            onMouseDown={() => (inputState.current.jump = true)}
+            onMouseUp={() => (inputState.current.jump = false)}
+            className="w-13 h-13 rounded-2xl bg-indigo-600/90 border border-indigo-400 text-white flex flex-col items-center justify-center active:scale-90 transition shadow-lg"
           >
             <ArrowUp className="w-6 h-6" />
-            <span className="text-[9px] font-black">{inVehicle ? 'DRIFT' : 'JUMP'}</span>
+            <span className="text-[8px] font-black">JUMP</span>
           </button>
         </div>
       </div>
