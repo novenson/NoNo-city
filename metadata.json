@@ -1,0 +1,6 @@
+{
+  "name": "NONO CITY LIFE — 3D Open World Action Game",
+  "description": "Immersive 3D open-world action, driving, mission, and city life game set in Nono Metropolis. Explore freely, drive customizable cars, engage in missions, buy properties, and customize outfits.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
